@@ -1,0 +1,210 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body,
+#root,
+.app-root {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  background: #2d2d30;
+  color: #d4d4d4;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+}
+
+.topbar {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid #2b2b2b;
+  background: #252526;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 280px 4px 1fr 4px 360px;
+  height: calc(100vh - 38px);
+  min-height: 0;
+}
+
+.panel {
+  border-right: 1px solid #2b2b2b;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel-right {
+  border-right: none;
+}
+
+.splitter {
+  background: #2b2b2b;
+  cursor: col-resize;
+}
+
+.splitter:hover {
+  background: #007acc;
+}
+
+.panel-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  min-height: 0;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+.tree-row {
+  width: 100%;
+  text-align: left;
+  padding: 6px;
+  margin-bottom: 2px;
+}
+
+.tree-row.active {
+  background: #094771;
+}
+
+.pdf-frame {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #2b2b2b;
+  background: #111;
+  overflow-y: auto;
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8px;
+}
+
+.pdf-frame canvas {
+  background: #fff;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 35%);
+}
+
+.viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-list {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-item {
+  padding: 8px;
+  border: 1px solid #383838;
+  border-radius: 6px;
+}
+
+.chat-item.user {
+  background: #0f2a3d;
+}
+
+.chat-item.assistant {
+  background: #1f1f1f;
+}
+
+.chat-role {
+  font-size: 12px;
+  color: #8a8a8a;
+  margin-bottom: 4px;
+}
+
+.chat-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+textarea {
+  min-height: 90px;
+  resize: vertical;
+  padding: 8px;
+}
+
+.error-text {
+  color: #f48771;
+  font-size: 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-card {
+  width: 520px;
+  background: #252526;
+  border: 1px solid #3e3e42;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-card input {
+  padding: 8px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
