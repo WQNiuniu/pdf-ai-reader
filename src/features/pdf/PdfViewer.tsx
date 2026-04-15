@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFDocumentProxy } from "pdfjs-dist/types/src/display/api";
@@ -16,13 +16,18 @@ type Props = {
 };
 
 export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const pageWrapRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const pageCanvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
+  const renderedZoomRef = useRef<Record<number, number>>({});
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [pageIndex, setPageIndex] = useState(1);
   const [zoom, setZoom] = useState(100);
+  const [jumpTo, setJumpTo] = useState<string>("");
   const [pageTexts, setPageTexts] = useState<string[]>([]);
+  const [pageBaseSizes, setPageBaseSizes] = useState<Record<number, { width: number; height: number }>>({});
+  const [visiblePages, setVisiblePages] = useState<number[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -38,15 +43,22 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
         setNumPages(pdf.numPages);
         setPageIndex(1);
         onPageChange(1);
+        setJumpTo("1");
+        renderedZoomRef.current = {};
 
         const texts: string[] = [];
+        const baseSizes: Record<number, { width: number; height: number }> = {};
         for (let i = 1; i <= pdf.numPages; i += 1) {
           const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1 });
+          baseSizes[i] = { width: viewport.width, height: viewport.height };
           const text = await page.getTextContent();
           texts.push(text.items.map((item: any) => item.str).join(" "));
         }
         if (canceled) return;
         setPageTexts(texts);
+        setPageBaseSizes(baseSizes);
+        setVisiblePages([1]);
         setError("");
       } catch (e) {
         setPdfDoc(null);
@@ -58,20 +70,42 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
     };
   }, [filePath, onPageChange]);
 
+  const pagesToRender = useMemo(() => {
+    const set = new Set<number>();
+    // 始终预渲染当前页附近页面，保证翻页和滚动顺滑。
+    for (let p = pageIndex - 2; p <= pageIndex + 2; p += 1) {
+      if (p >= 1 && p <= numPages) set.add(p);
+    }
+    for (const p of visiblePages) {
+      for (let k = p - 1; k <= p + 1; k += 1) {
+        if (k >= 1 && k <= numPages) set.add(k);
+      }
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [numPages, pageIndex, visiblePages]);
+
   useEffect(() => {
-    if (!pdfDoc || !canvasRef.current) return;
+    if (!pdfDoc) return;
+    if (!pagesToRender.length) return;
     let canceled = false;
     (async () => {
       try {
-        const page = await pdfDoc.getPage(pageIndex);
-        if (canceled || !canvasRef.current) return;
-        const viewport = page.getViewport({ scale: zoom / 100 });
-        const canvas = canvasRef.current;
-        const context = canvas.getContext("2d");
-        if (!context) return;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: context, viewport }).promise;
+        setError("");
+        const scale = zoom / 100;
+        for (const pageNum of pagesToRender) {
+          if (canceled) return;
+          if (renderedZoomRef.current[pageNum] === zoom) continue;
+          const canvas = pageCanvasRefs.current[pageNum];
+          if (!canvas) continue;
+          const page = await pdfDoc.getPage(pageNum);
+          const viewport = page.getViewport({ scale });
+          const context = canvas.getContext("2d");
+          if (!context) continue;
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: context, viewport }).promise;
+          renderedZoomRef.current[pageNum] = zoom;
+        }
       } catch (e) {
         setError(String(e));
       }
@@ -79,13 +113,43 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
     return () => {
       canceled = true;
     };
-  }, [pdfDoc, pageIndex, zoom]);
+  }, [pdfDoc, pagesToRender, zoom]);
 
   useEffect(() => {
-    // 翻页后回到页首；缩放时保留当前位置以便连续阅读。
-    if (frameRef.current) {
-      frameRef.current.scrollTop = 0;
+    if (!frameRef.current) return;
+    if (!numPages) return;
+    const root = frameRef.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // 选择在视区内占比最大的页作为当前页
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .map((e) => ({
+            page: Number((e.target as HTMLElement).dataset.page || "0"),
+            ratio: e.intersectionRatio
+          }))
+          .filter((v) => v.page >= 1);
+        if (!visible.length) return;
+        setVisiblePages(visible.map((v) => v.page));
+        visible.sort((a, b) => b.ratio - a.ratio);
+        const next = visible[0]?.page;
+        if (next && next !== pageIndex) {
+          setPageIndex(next);
+        }
+      },
+      { root, threshold: [0.25, 0.5, 0.75] }
+    );
+    for (let p = 1; p <= numPages; p += 1) {
+      const el = pageWrapRefs.current[p];
+      if (el) observer.observe(el);
     }
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numPages, filePath]);
+
+  useEffect(() => {
+    // 当前页变化时同步页码输入框（滚动触发也会更新）
+    if (pageIndex >= 1) setJumpTo(String(pageIndex));
   }, [pageIndex]);
 
   useEffect(() => {
@@ -94,8 +158,25 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
     onContextChange(context);
   }, [onContextChange, onPageChange, pageIndex, pageTexts]);
 
+  const scrollToPage = (page: number) => {
+    const el = pageWrapRefs.current[page];
+    if (el) {
+      el.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  };
+
   const canPrev = pageIndex > 1;
   const canNext = pageIndex < numPages;
+  const pageList = useMemo(() => Array.from({ length: numPages }, (_, i) => i + 1), [numPages]);
+  const scaledPageSize = (p: number) => {
+    const base = pageBaseSizes[p];
+    if (!base) return { width: 760, height: 980 };
+    const scale = zoom / 100;
+    return {
+      width: Math.round(base.width * scale),
+      height: Math.round(base.height * scale)
+    };
+  };
 
   if (!filePath) return <div className="panel-body">请选择左侧 PDF 文件开始阅读。</div>;
 
@@ -104,7 +185,14 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
       <div className="panel-header">
         <span>PDF 阅读</span>
         <div className="viewer-actions">
-          <button disabled={!canPrev} onClick={() => setPageIndex((p) => Math.max(1, p - 1))}>
+          <button
+            disabled={!canPrev}
+            onClick={() => {
+              const next = Math.max(1, pageIndex - 1);
+              scrollToPage(next);
+              setPageIndex(next);
+            }}
+          >
             上一页
           </button>
           <span>
@@ -112,9 +200,33 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
           </span>
           <button
             disabled={!canNext}
-            onClick={() => setPageIndex((p) => Math.min(numPages || 1, p + 1))}
+            onClick={() => {
+              const next = Math.min(numPages || 1, pageIndex + 1);
+              scrollToPage(next);
+              setPageIndex(next);
+            }}
           >
             下一页
+          </button>
+          <input
+            className="page-jump"
+            value={jumpTo}
+            onChange={(e) => setJumpTo(e.target.value)}
+            placeholder="页码"
+            inputMode="numeric"
+          />
+          <button
+            onClick={() => {
+              const n = Number(jumpTo);
+              if (!Number.isFinite(n)) return;
+              const target = Math.min(Math.max(1, Math.trunc(n)), numPages || 1);
+              scrollToPage(target);
+              setPageIndex(target);
+              setJumpTo(String(target));
+            }}
+            disabled={!numPages}
+          >
+            跳转
           </button>
           <button onClick={() => setZoom((v) => Math.max(50, v - 10))}>-</button>
           <span>{zoom}%</span>
@@ -123,7 +235,26 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
       </div>
       {error && <div className="error-text">{error}</div>}
       <div className="pdf-frame" ref={frameRef}>
-        <canvas ref={canvasRef} />
+        <div className="pdf-pages">
+          {pageList.map((p) => (
+            <div
+              key={p}
+              className={`pdf-page ${p === pageIndex ? "active" : ""}`}
+              data-page={p}
+              ref={(el) => {
+                pageWrapRefs.current[p] = el;
+              }}
+            >
+              <div className="pdf-page-label">Page {p}</div>
+              <canvas
+                style={scaledPageSize(p)}
+                ref={(el) => {
+                  pageCanvasRefs.current[p] = el;
+                }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -117,9 +117,40 @@ textarea {
   padding: 8px;
 }
 
-.pdf-frame canvas {
+.pdf-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+
+.pdf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #2b2b2b;
+  border-radius: 8px;
+  background: #0f0f10;
+}
+
+.pdf-page.active {
+  outline: 2px solid #007acc;
+}
+
+.pdf-page-label {
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.pdf-page canvas {
   background: #fff;
   box-shadow: 0 4px 18px rgb(0 0 0 / 35%);
+}
+
+.page-jump {
+  width: 64px;
+  padding: 6px 8px;
 }
 
 .viewer-actions {
