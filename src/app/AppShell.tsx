@@ -12,6 +12,7 @@ const defaultAiConfig: AiConfig = {
   model: "gpt-4o-mini",
   temperature: 0.2
 };
+const fallbackStorageKey = "pdf-ai-reader.aiConfig";
 
 export function AppShell() {
   const [leftWidth, setLeftWidth] = useState(280);
@@ -59,6 +60,18 @@ export function AppShell() {
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", stop);
   };
+
+  useEffect(() => {
+    // 兜底加载：即使 Store 插件不可用，也可从 localStorage 恢复配置。
+    try {
+      const raw = localStorage.getItem(fallbackStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as AiConfig;
+      setAiConfig((prev) => ({ ...prev, ...saved }));
+    } catch {
+      // ignore bad local data
+    }
+  }, []);
 
   useEffect(() => {
     // 避免触发 WebView 全局缩放（会让右侧 AI 面板也变大）。

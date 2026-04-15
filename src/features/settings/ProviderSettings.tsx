@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Store } from "@tauri-apps/plugin-store";
 import { AiConfig } from "../../app/types";
+import { resolveChatEndpoint } from "../chat/aiClient";
 
 const store = new Store("settings.json");
+const fallbackStorageKey = "pdf-ai-reader.aiConfig";
 
 type Props = {
   value: AiConfig;
@@ -12,21 +14,107 @@ type Props = {
 
 export function ProviderSettings({ value, onChange, onClose }: Props) {
   const [draft, setDraft] = useState<AiConfig>(value);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState("");
 
   useEffect(() => {
-    store.get<AiConfig>("aiConfig").then((saved) => {
-      if (saved) {
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await store.get<AiConfig>("aiConfig");
+        if (cancelled) return;
+        if (saved) {
+          setDraft(saved);
+          onChange(saved);
+          return;
+        }
+      } catch {
+        // Tauri Store 不可用时回退到 localStorage。
+      }
+      try {
+        const raw = localStorage.getItem(fallbackStorageKey);
+        if (!raw) return;
+        const saved = JSON.parse(raw) as AiConfig;
+        if (cancelled) return;
         setDraft(saved);
         onChange(saved);
+      } catch {
+        // ignore bad local data
       }
-    });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [onChange]);
 
   const save = async () => {
-    await store.set("aiConfig", draft);
-    await store.save();
+    if (!draft.baseUrl.trim() || !draft.model.trim()) {
+      setStatus("请填写 Base URL 和 Model。");
+      return;
+    }
+    setSaving(true);
+    setStatus("");
+    let savedByStore = false;
+    try {
+      await store.set("aiConfig", draft);
+      await store.save();
+      savedByStore = true;
+    } catch {
+      savedByStore = false;
+    }
+    try {
+      localStorage.setItem(fallbackStorageKey, JSON.stringify(draft));
+    } catch {
+      // ignore localStorage failure
+    }
     onChange(draft);
-    onClose();
+    setSaving(false);
+    setStatus(savedByStore ? "保存成功。" : "已保存（回退模式）。");
+    setTimeout(() => onClose(), 200);
+  };
+
+  const testConnection = async () => {
+    if (!draft.baseUrl.trim() || !draft.model.trim() || !draft.apiKey.trim()) {
+      setStatus("测试前请填写 Base URL、Model 和 API Key。");
+      return;
+    }
+    setTesting(true);
+    setStatus("正在测试连接...");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const payload = {
+        model: draft.model,
+        temperature: draft.temperature,
+        messages: [{ role: "user", content: "Reply with OK only." }],
+        max_tokens: 8
+      };
+      const endpoint = resolveChatEndpoint(draft.baseUrl);
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${draft.apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status} (${endpoint}): ${text || resp.statusText}`);
+      }
+      setStatus("连接测试成功。");
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        setStatus("连接测试超时（15s）。");
+      } else {
+        setStatus(`连接测试失败：${String(error)}`);
+      }
+    } finally {
+      clearTimeout(timer);
+      setTesting(false);
+    }
   };
 
   return (
@@ -73,8 +161,14 @@ export function ProviderSettings({ value, onChange, onClose }: Props) {
         </label>
         <div className="modal-actions">
           <button onClick={onClose}>取消</button>
-          <button onClick={save}>保存</button>
+          <button onClick={testConnection} disabled={saving || testing}>
+            {testing ? "测试中..." : "测试连接"}
+          </button>
+          <button onClick={save} disabled={saving}>
+            {saving ? "保存中..." : "保存"}
+          </button>
         </div>
+        {status && <div className="panel-subtitle">{status}</div>}
       </div>
     </div>
   );

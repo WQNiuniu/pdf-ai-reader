@@ -1,5 +1,18 @@
 import { AiConfig, ChatMessage } from "../../app/types";
 
+export function resolveChatEndpoint(baseUrl: string): string {
+  const input = baseUrl.trim();
+  if (!input) return input;
+  const normalized = input.replace(/\/+$/, "");
+  if (/(\/chat\/completions|\/responses)$/i.test(normalized)) {
+    return normalized;
+  }
+  if (/\/v\d+$/i.test(normalized)) {
+    return `${normalized}/chat/completions`;
+  }
+  return `${normalized}/chat/completions`;
+}
+
 export async function askAi(
   config: AiConfig,
   messages: ChatMessage[],
@@ -25,8 +38,9 @@ export async function askAi(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
   let resp: Response;
+  const endpoint = resolveChatEndpoint(config.baseUrl);
   try {
-    resp = await fetch(config.baseUrl, {
+    resp = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
@@ -44,7 +58,7 @@ export async function askAi(
     clearTimeout(timer);
   }
   if (!resp.ok) {
-    throw new Error(`AI 请求失败: ${resp.status} ${resp.statusText}`);
+    throw new Error(`AI 请求失败(${endpoint}): ${resp.status} ${resp.statusText}`);
   }
   const data = await resp.json();
   return data?.choices?.[0]?.message?.content ?? "模型没有返回有效内容。";
