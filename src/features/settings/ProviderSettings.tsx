@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
-import { Store } from "@tauri-apps/plugin-store";
+import { load } from "@tauri-apps/plugin-store";
 import { AiConfig } from "../../app/types";
 import { resolveChatEndpoint } from "../chat/aiClient";
 
-const store = new Store("settings.json");
 const fallbackStorageKey = "pdf-ai-reader.aiConfig";
+let storePromise: Promise<Awaited<ReturnType<typeof load>>> | null = null;
+
+async function getStore() {
+  storePromise ??= load("settings.json");
+  return storePromise;
+}
 
 type Props = {
   value: AiConfig;
@@ -22,6 +27,7 @@ export function ProviderSettings({ value, onChange, onClose }: Props) {
     let cancelled = false;
     (async () => {
       try {
+        const store = await getStore();
         const saved = await store.get<AiConfig>("aiConfig");
         if (cancelled) return;
         if (saved) {
@@ -57,6 +63,7 @@ export function ProviderSettings({ value, onChange, onClose }: Props) {
     setStatus("");
     let savedByStore = false;
     try {
+      const store = await getStore();
       await store.set("aiConfig", draft);
       await store.save();
       savedByStore = true;
