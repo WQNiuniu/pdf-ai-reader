@@ -80,6 +80,63 @@ textarea {
   gap: 8px;
 }
 
+.panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-input-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-collapse-btn {
+  background: transparent;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: #a0a0a0;
+  flex-shrink: 0;
+}
+
+.chat-collapse-btn:hover {
+  background: #3e3e42;
+  color: #d4d4d4;
+}
+
+.chat-collapsed {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 4px;
+  background: #252526;
+}
+
+.chat-expand-btn {
+  background: transparent;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: #a0a0a0;
+  flex-shrink: 0;
+}
+
+.chat-expand-btn:hover {
+  background: #3e3e42;
+  color: #d4d4d4;
+}
+
 .panel-subtitle {
   font-size: 12px;
   color: #a0a0a0;
@@ -195,7 +252,7 @@ textarea {
 
 textarea {
   min-height: 90px;
-  resize: vertical;
+  resize: none;
   padding: 8px;
 }
 

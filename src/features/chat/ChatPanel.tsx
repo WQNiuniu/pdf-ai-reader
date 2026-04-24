@@ -9,6 +9,9 @@ type Props = {
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
   aiConfig: AiConfig;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  onOpenSettings?: () => void;
 };
 
 export function ChatPanel({
@@ -17,11 +20,28 @@ export function ChatPanel({
   pdfContext,
   messages,
   onMessagesChange,
-  aiConfig
+  aiConfig,
+  collapsed,
+  onToggleCollapse,
+  onOpenSettings
 }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  if (collapsed) {
+    return (
+      <div className="chat-collapsed">
+        <button
+          className="chat-expand-btn"
+          onClick={onToggleCollapse}
+          title="展开 AI 对话"
+        >
+          ◀
+        </button>
+      </div>
+    );
+  }
 
   const send = async () => {
     if (!input.trim() || loading) return;
@@ -43,8 +63,16 @@ export function ChatPanel({
   return (
     <div className="panel-body">
       <div className="panel-header">
-        <span>AI 对话</span>
-        <span className="panel-subtitle">{filePath ? "文档已加载" : "未打开 PDF"}</span>
+        <div className="panel-header-left">
+          <button
+            className="chat-collapse-btn"
+            onClick={onToggleCollapse}
+            title="折叠 AI 对话"
+          >
+            ▶
+          </button>
+          <span>AI 对话</span>
+        </div>
       </div>
       <div className="chat-list">
         {messages.map((msg, index) => (
@@ -55,6 +83,10 @@ export function ChatPanel({
         ))}
       </div>
       {error && <div className="error-text">{error}</div>}
+      <div className="chat-input-bar">
+        <span className="panel-subtitle">{filePath ? "文档已加载" : "未打开 PDF"}</span>
+        <button onClick={onOpenSettings}>AI 设置</button>
+      </div>
       <div className="chat-input-wrap">
         <textarea
           value={input}

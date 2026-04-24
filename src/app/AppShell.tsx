@@ -25,6 +25,8 @@ export function AppShell() {
   const [aiConfig, setAiConfig] = useState<AiConfig>(defaultAiConfig);
   const [showSettings, setShowSettings] = useState(false);
 
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+
   const title = useMemo(() => {
     if (!currentPdfPath) return "PDF AI Reader";
     return currentPdfPath.split(/[\\/]/).pop() ?? "PDF AI Reader";
@@ -98,14 +100,13 @@ export function AppShell() {
     <div className="app-root">
       <header className="topbar">
         <div className="title">{title}</div>
-        <div className="topbar-actions">
-          <button onClick={() => setShowSettings((v) => !v)}>AI 设置</button>
-        </div>
       </header>
       <main
         className="main-grid"
         style={{
-          gridTemplateColumns: `${leftWidth}px 4px minmax(480px, 1fr) 4px ${rightWidth}px`
+          gridTemplateColumns: rightCollapsed
+            ? `${leftWidth}px 4px minmax(480px, 1fr) 0px 34px`
+            : `${leftWidth}px 4px minmax(480px, 1fr) 4px ${rightWidth}px`
         }}
       >
         <aside className="panel panel-left">
@@ -133,6 +134,9 @@ export function AppShell() {
             messages={currentMessages}
             onMessagesChange={updateCurrentMessages}
             aiConfig={aiConfig}
+            collapsed={rightCollapsed}
+            onToggleCollapse={() => setRightCollapsed((v) => !v)}
+            onOpenSettings={() => setShowSettings(true)}
           />
         </aside>
       </main>
