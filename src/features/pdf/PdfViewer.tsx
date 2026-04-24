@@ -20,6 +20,7 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
   const pageWrapRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const pageCanvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
   const renderedZoomRef = useRef<Record<number, number>>({});
+  const activeRendersRef = useRef<Map<number, pdfjsLib.RenderTask>>(new Map());
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [pageIndex, setPageIndex] = useState(1);
@@ -92,26 +93,49 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
       try {
         setError("");
         const scale = zoom / 100;
+        const dpr = window.devicePixelRatio || 1;
         for (const pageNum of pagesToRender) {
           if (canceled) return;
           if (renderedZoomRef.current[pageNum] === zoom) continue;
           const canvas = pageCanvasRefs.current[pageNum];
           if (!canvas) continue;
           const page = await pdfDoc.getPage(pageNum);
-          const viewport = page.getViewport({ scale });
+          const viewport = page.getViewport({ scale: scale * dpr });
           const context = canvas.getContext("2d");
           if (!context) continue;
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          await page.render({ canvasContext: context, viewport }).promise;
-          renderedZoomRef.current[pageNum] = zoom;
+          const baseSize = pageBaseSizes[pageNum] || { width: viewport.width / (scale * dpr), height: viewport.height / (scale * dpr) };
+          canvas.style.width = `${baseSize.width * scale}px`;
+          canvas.style.height = `${baseSize.height * scale}px`;
+          // 取消该页面可能存在的旧渲染任务，避免同一 canvas 并发渲染
+          const oldTask = activeRendersRef.current.get(pageNum);
+          if (oldTask) {
+            try { oldTask.cancel(); } catch {}
+            activeRendersRef.current.delete(pageNum);
+          }
+          const renderTask = page.render({ canvasContext: context, viewport });
+          activeRendersRef.current.set(pageNum, renderTask);
+          try {
+            await renderTask.promise;
+            if (!canceled) renderedZoomRef.current[pageNum] = zoom;
+          } catch (e: any) {
+            // 取消操作抛出的 AbortException 是正常行为，忽略
+            if (e?.name !== "AbortException") throw e;
+          }
+          activeRendersRef.current.delete(pageNum);
         }
       } catch (e) {
-        setError(String(e));
+        if (!canceled) setError(String(e));
       }
     })();
     return () => {
       canceled = true;
+      // 取消所有正在进行的渲染任务
+      for (const task of activeRendersRef.current.values()) {
+        try { task.cancel(); } catch {}
+      }
+      activeRendersRef.current.clear();
     };
   }, [pdfDoc, pagesToRender, zoom]);
 
