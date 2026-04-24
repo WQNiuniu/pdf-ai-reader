@@ -30,6 +30,7 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
   const [pageBaseSizes, setPageBaseSizes] = useState<Record<number, { width: number; height: number }>>({});
   const [visiblePages, setVisiblePages] = useState<number[]>([]);
   const [error, setError] = useState("");
+  const ignoreScrollRef = useRef(false);
 
   useEffect(() => {
     if (!filePath) return;
@@ -145,6 +146,7 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
     const root = frameRef.current;
     const observer = new IntersectionObserver(
       (entries) => {
+        if (ignoreScrollRef.current) return;
         // 选择在视区内占比最大的页作为当前页
         const visible = entries
           .filter((e) => e.isIntersecting)
@@ -181,6 +183,26 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
     const context = buildPageContext(pageTexts, pageIndex);
     onContextChange(context);
   }, [onContextChange, onPageChange, pageIndex, pageTexts]);
+
+  const changeZoom = (delta: number) => {
+    const frame = frameRef.current;
+    const pageEl = pageWrapRefs.current[pageIndex];
+    const anchorOffset = frame && pageEl ? pageEl.offsetTop - frame.scrollTop : null;
+
+    ignoreScrollRef.current = true;
+    setZoom((v) => Math.min(200, Math.max(50, v + delta)));
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const f = frameRef.current;
+        const el = pageWrapRefs.current[pageIndex];
+        if (f && el && anchorOffset !== null) {
+          f.scrollTop = el.offsetTop - anchorOffset;
+        }
+        setTimeout(() => { ignoreScrollRef.current = false; }, 150);
+      });
+    });
+  };
 
   const scrollToPage = (page: number) => {
     const el = pageWrapRefs.current[page];
@@ -252,9 +274,13 @@ export function PdfViewer({ filePath, onPageChange, onContextChange }: Props) {
           >
             跳转
           </button>
-          <button onClick={() => setZoom((v) => Math.max(50, v - 10))}>-</button>
+          <button
+            onClick={() => changeZoom(-10)}
+          >-</button>
           <span>{zoom}%</span>
-          <button onClick={() => setZoom((v) => Math.min(200, v + 10))}>+</button>
+          <button
+            onClick={() => changeZoom(+10)}
+          >+</button>
         </div>
       </div>
       {error && <div className="error-text">{error}</div>}
